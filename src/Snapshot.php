@@ -31,19 +31,15 @@ class Snapshot
         $this->name = pathinfo($fileName, PATHINFO_FILENAME);
     }
 
-    public function load(string $connectionName = null)
+    public function load()
     {
         event(new LoadingSnapshot($this));
-
-        if ($connectionName !== null) {
-            DB::setDefaultConnection($connectionName);
-        }
 
         $this->dropAllCurrentTables();
 
         $dbDumpContents = $this->disk->get($this->fileName);
 
-        DB::connection($connectionName)->unprepared($dbDumpContents);
+        DB::unprepared($dbDumpContents);
 
         event(new LoadedSnapshot($this));
     }

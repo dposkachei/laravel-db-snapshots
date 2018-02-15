@@ -12,9 +12,9 @@ class Load extends Command
     use AsksForSnapshotName;
     use ConfirmableTrait;
 
-    protected $signature = 'snapshot:load {name?} {--connection=} --disk';
+    protected $signature = 'snapshot:load {name?} --disk';
 
-    protected $description = 'Load up a snapshot.';
+    protected $description = 'Load up a snapshots.';
 
     public function handle()
     {
@@ -40,7 +40,7 @@ class Load extends Command
             return;
         }
 
-        $snapshot->load($this->option('connection'));
+        $snapshot->load();
 
         $this->info("Snapshot `{$name}` loaded!");
     }

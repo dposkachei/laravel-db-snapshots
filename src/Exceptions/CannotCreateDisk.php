@@ -6,7 +6,7 @@ use Exception;
 
 class CannotCreateDisk extends Exception
 {
-    public static function diskNotDefined(string $diskName): self
+    public static function diskNotDefined(string $diskName): CannotCreateDisk
     {
         $existingDiskNames = implode(array_keys(config('filesystems.disks')), ', ');
 

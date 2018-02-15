@@ -2,6 +2,7 @@
 
 namespace Spatie\DbSnapshots;
 
+use Illuminate\Support\Facades\DB;
 use Spatie\DbDumper\DbDumper;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -28,7 +29,9 @@ class SnapshotFactory
     public function create(string $snapshotName, string $diskName, string $connectionName): Snapshot
     {
         $disk = $this->getDisk($diskName);
+        $disk->makeDirectory($snapshotName);
 
+        $path = $snapshotName;
         $fileName = $snapshotName.'.sql';
         $fileName = pathinfo($fileName, PATHINFO_BASENAME);
 
@@ -38,7 +41,7 @@ class SnapshotFactory
             $connectionName
         ));
 
-        $this->createDump($connectionName, $fileName, $disk);
+        $this->createDump($connectionName, $fileName, $disk, $path);
 
         $snapshot = new Snapshot($disk, $fileName);
 
@@ -63,19 +66,30 @@ class SnapshotFactory
         return $factory::createForConnection($connectionName);
     }
 
-    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk)
+    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk, $path = '')
     {
+        $aTables = array_map('reset', DB::select('SHOW TABLES'));
+
         $directory = (new TemporaryDirectory(config('db-snapshots.temporary_directory_path')))->create();
 
-        $dumpPath = $directory->path($fileName);
+        foreach ($aTables as $aTable) {
+            $fileName = $aTable.'.sql';
+            $dumpPath = $directory->path($fileName);
+            $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
 
-        $this->getDbDumper($connectionName)->dumpToFile($dumpPath);
+            $file = fopen($dumpPath, 'r');
 
-        $file = fopen($dumpPath, 'r');
+            $disk->put($path.'/'.$fileName, $file);
 
-        $disk->put($fileName, $file);
+            fclose($file);
+        }
 
-        fclose($file);
+        //$dumpPath = $directory->path($fileName);
+
+        //$this->getDbDumper($connectionName)->includeTables()->dumpToFile($dumpPath);
+        dd('hi2');
+
+
 
         $directory->delete();
     }
