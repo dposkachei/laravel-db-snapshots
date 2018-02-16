@@ -2,7 +2,9 @@
 
 namespace Spatie\DbSnapshots;
 
+use Chumper\Zipper\Facades\Zipper;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Spatie\DbDumper\DbDumper;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -29,7 +31,7 @@ class SnapshotFactory
     public function create(string $snapshotName, string $diskName, string $connectionName): Snapshot
     {
         $disk = $this->getDisk($diskName);
-        $disk->makeDirectory($snapshotName);
+        //$disk->makeDirectory($snapshotName);
 
         $path = $snapshotName;
         $fileName = $snapshotName.'.sql';
@@ -72,22 +74,34 @@ class SnapshotFactory
 
         $directory = (new TemporaryDirectory(config('db-snapshots.temporary_directory_path')))->create();
 
-        foreach ($aTables as $aTable) {
+        $name = str_replace('.sql', '', $fileName);
+        foreach ($aTables as $key => $aTable) {
             $fileName = $aTable.'.sql';
             $dumpPath = $directory->path($fileName);
             $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
 
-            $file = fopen($dumpPath, 'r');
+            //$file = fopen($dumpPath, 'r');
 
-            $disk->put($path.'/'.$fileName, $file);
+            //$disk->put($path.'/'.$fileName, $file);
 
-            fclose($file);
+            //fclose($file);
+
+            //dd($directory->getName());
+            if ($key === 2) {
+                break;
+            }
         }
+        $zip = $directory->getName().'/'.$name.'.zip';
+        Zipper::make($zip)->add($directory->getName())->close();
+
+        //$disk->move($zip, $file);
+        File::move($zip, database_path('snapshots').'/'.$name.'.zip');
+
 
         //$dumpPath = $directory->path($fileName);
 
         //$this->getDbDumper($connectionName)->includeTables()->dumpToFile($dumpPath);
-        dd('hi2');
+        //dd('hi2');
 
 
 

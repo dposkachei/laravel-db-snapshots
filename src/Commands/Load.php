@@ -12,7 +12,7 @@ class Load extends Command
     use AsksForSnapshotName;
     use ConfirmableTrait;
 
-    protected $signature = 'snapshot:load {name?} --disk';
+    protected $signature = 'snapshot:load {name?} {table?} --disk';
 
     protected $description = 'Load up a snapshots.';
 
@@ -31,6 +31,8 @@ class Load extends Command
         }
 
         $name = $this->argument('name') ?: $this->askForSnapshotName();
+
+        $table = $this->argument('table') ?: $this->askForSnapshotTable();
 
         $snapshot = app(SnapshotRepository::class)->findByName($name);
 

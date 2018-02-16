@@ -31,11 +31,11 @@ class Snapshot
         $this->name = pathinfo($fileName, PATHINFO_FILENAME);
     }
 
-    public function load()
+    public function load($table = '')
     {
         event(new LoadingSnapshot($this));
 
-        $this->dropAllCurrentTables();
+        $this->dropAllCurrentTables($table);
 
         $dbDumpContents = $this->disk->get($this->fileName);
 
@@ -63,11 +63,13 @@ class Snapshot
         return Carbon::createFromTimestamp($this->disk->lastModified($this->fileName));
     }
 
-    protected function dropAllCurrentTables()
+    protected function dropAllCurrentTables($table = '')
     {
         $tableDropper = TableDropperFactory::create(DB::getDriverName());
 
-        $tableDropper->dropAllTables();
+        if ($table === '') {
+            $tableDropper->dropAllTables();
+        }
 
         DB::reconnect();
     }
