@@ -28,12 +28,12 @@ class SnapshotFactory
         $this->filesystemFactory = $filesystemFactory;
     }
 
-    public function create(string $snapshotName, string $diskName, string $connectionName): Snapshot
+    public function create(string $snapshotName, string $diskName, string $connectionName, $tables = []): Snapshot
     {
         $disk = $this->getDisk($diskName);
-        //$disk->makeDirectory($snapshotName);
 
         $path = $snapshotName;
+
         $fileName = $snapshotName.'.sql';
         $fileName = pathinfo($fileName, PATHINFO_BASENAME);
 
@@ -43,7 +43,7 @@ class SnapshotFactory
             $connectionName
         ));
 
-        $this->createDump($connectionName, $fileName, $disk, $path);
+        $this->createDump($connectionName, $fileName, $disk, $path, $tables);
 
         $snapshot = new Snapshot($disk, $fileName);
 
@@ -68,42 +68,37 @@ class SnapshotFactory
         return $factory::createForConnection($connectionName);
     }
 
-    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk, $path = '')
+    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk, $path = '', $tables)
     {
         $aTables = array_map('reset', DB::select('SHOW TABLES'));
 
+        if (!empty($tables)) {
+            $aTables = collect($aTables)->reject(function ($name) use ($tables) {
+                return !in_array($name, $tables);
+            })->toArray();
+        }
+
         $directory = (new TemporaryDirectory(config('db-snapshots.temporary_directory_path')))->create();
 
-        $name = str_replace('.sql', '', $fileName);
         foreach ($aTables as $key => $aTable) {
-            $fileName = $aTable.'.sql';
-            $dumpPath = $directory->path($fileName);
+            $name = $aTable.'.sql';
+            $dumpPath = $directory->path($name);
             $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
-
-            //$file = fopen($dumpPath, 'r');
-
-            //$disk->put($path.'/'.$fileName, $file);
-
-            //fclose($file);
-
-            //dd($directory->getName());
-            if ($key === 2) {
-                break;
-            }
         }
-        $zip = $directory->getName().'/'.$name.'.zip';
-        Zipper::make($zip)->add($directory->getName())->close();
 
-        //$disk->move($zip, $file);
-        File::move($zip, database_path('snapshots').'/'.$name.'.zip');
+        $fileName = str_replace('.sql', '', $fileName);
 
+        $zip = $directory->path().'/'.$fileName.'.zip';
 
-        //$dumpPath = $directory->path($fileName);
+        Zipper::make($zip)->add($directory->path())->close();
 
-        //$this->getDbDumper($connectionName)->includeTables()->dumpToFile($dumpPath);
-        //dd('hi2');
+        $to = database_path('snapshots').'/'.$path;
 
+        if (!is_dir(dirname($to))) {
+            mkdir(dirname($to), 0777, true);
+        }
 
+        File::move($zip, database_path('snapshots').'/'.$path.'.zip');
 
         $directory->delete();
     }
