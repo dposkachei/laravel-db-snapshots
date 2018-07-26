@@ -28,7 +28,7 @@ class SnapshotFactory
         $this->filesystemFactory = $filesystemFactory;
     }
 
-    public function create(string $snapshotName, string $diskName, string $connectionName, $tables = []): Snapshot
+    public function create(string $snapshotName, string $diskName, string $connectionName, $tables = '*', $reject = [], $withZip = true): Snapshot
     {
         $disk = $this->getDisk($diskName);
 
@@ -43,7 +43,7 @@ class SnapshotFactory
             $connectionName
         ));
 
-        $this->createDump($connectionName, $fileName, $disk, $path, $tables);
+        $this->createDump($connectionName, $fileName, $disk, $path, $tables, $reject, $withZip);
 
         $snapshot = new Snapshot($disk, $fileName);
 
@@ -68,38 +68,71 @@ class SnapshotFactory
         return $factory::createForConnection($connectionName);
     }
 
-    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk, $path = '', $tables)
+    protected function createDump(string $connectionName, string $fileName, FilesystemAdapter $disk, $path = '', $tables, $reject, $withZip)
+    {
+        $aTables = $this->columns($tables, $reject);
+
+        $directory = (new TemporaryDirectory(config('db-snapshots.temporary_directory_path')))->create();
+
+        $fileName = str_replace('.sql', '', $fileName);
+
+        if ($withZip) {
+            foreach ($aTables as $key => $aTable) {
+                $name = $aTable.'.sql';
+                $dumpPath = $directory->path($name);
+                $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
+            }
+            $zip = $directory->path().'/'.$fileName.'.zip';
+
+            Zipper::make($zip)->add($directory->path())->close();
+
+            $to = database_path('snapshots').'/'.$path;
+
+            if (!is_dir(dirname($to))) {
+                mkdir(dirname($to), 0777, true);
+            }
+
+            File::move($zip, database_path('snapshots').'/'.$path.'.zip');
+        } else {
+            $to = database_path('snapshots').'/'.$path;
+            if (!is_dir($to)) {
+                File::makeDirectory($to, 0777, true);
+            }
+
+            foreach ($aTables as $key => $aTable) {
+                $name = $aTable.'.sql';
+                $dumpPath = $to.'/'.$name;
+                $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
+            }
+        }
+
+        $directory->delete();
+    }
+
+
+    private function columns($tables, $reject)
     {
         $aTables = array_map('reset', DB::select('SHOW TABLES'));
 
-        if (!empty($tables)) {
+        if (!empty($tables) && $tables !== '*') {
             $aTables = collect($aTables)->reject(function ($name) use ($tables) {
                 return !in_array($name, $tables);
             })->toArray();
         }
-
-        $directory = (new TemporaryDirectory(config('db-snapshots.temporary_directory_path')))->create();
-
-        foreach ($aTables as $key => $aTable) {
-            $name = $aTable.'.sql';
-            $dumpPath = $directory->path($name);
-            $this->getDbDumper($connectionName)->includeTables([$aTable])->dumpToFile($dumpPath);
+        if (!empty($reject)) {
+            foreach ($reject as $table) {
+                $pos = strpos($table, '*');
+                if ($pos !== false) {
+                    $aTables = collect($aTables)->reject(function ($name) use ($table) {
+                        return starts_with($name, str_replace('*', '', $table));
+                    })->toArray();
+                }
+            }
+            $aTables = collect($aTables)->reject(function ($name) use ($reject) {
+                return in_array($name, $reject);
+            })->toArray();
         }
 
-        $fileName = str_replace('.sql', '', $fileName);
-
-        $zip = $directory->path().'/'.$fileName.'.zip';
-
-        Zipper::make($zip)->add($directory->path())->close();
-
-        $to = database_path('snapshots').'/'.$path;
-
-        if (!is_dir(dirname($to))) {
-            mkdir(dirname($to), 0777, true);
-        }
-
-        File::move($zip, database_path('snapshots').'/'.$path.'.zip');
-
-        $directory->delete();
+        return $aTables;
     }
 }
