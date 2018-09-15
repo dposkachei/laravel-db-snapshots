@@ -4,12 +4,14 @@ namespace Spatie\DbSnapshots\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
+use Spatie\DbSnapshots\Commands\Concerns\AsksForSnapshotTable;
 use Spatie\DbSnapshots\SnapshotRepository;
 use Spatie\DbSnapshots\Commands\Concerns\AsksForSnapshotName;
 
 class Load extends Command
 {
     use AsksForSnapshotName;
+    use AsksForSnapshotTable;
     use ConfirmableTrait;
 
     protected $signature = 'snapshot:load {name?} {table?} --disk';
@@ -32,7 +34,7 @@ class Load extends Command
 
         $name = $this->argument('name') ?: $this->askForSnapshotName();
 
-        $table = $this->argument('table') ?: $this->askForSnapshotTable();
+        //$table = $this->argument('table') ?: $this->askForSnapshotTable();
 
         $snapshot = app(SnapshotRepository::class)->findByName($name);
 
